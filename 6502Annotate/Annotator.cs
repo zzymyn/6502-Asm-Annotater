@@ -79,8 +79,8 @@ namespace _6502Annotate
                 int labelRow;
                 if (m_LabelRows.TryGetValue(label + ":", out labelRow))
                 {
-                    var labelCell = m_Worksheet.Cells[labelRow, labelCol];
-                    asmCell.Hyperlink = new ExcelHyperLink(labelCell.Address, asmCell.Text);
+                    var linkCell = m_Worksheet.Cells[labelRow, asmCol];
+                    asmCell.Hyperlink = new ExcelHyperLink(linkCell.Address, asmCell.Text);
                     asmCell.StyleName = "Hyperlink";
                 }
                 else
@@ -93,19 +93,7 @@ namespace _6502Annotate
 
         private void DrawGraph()
         {
-            var gens = new List<HashSet<JumpSet>>();
-            var jumpSets = FindJumpSets();
-
-            while (jumpSets.Count > 0)
-            {
-                var currGen = new HashSet<JumpSet>();
-                foreach (var jumpSet in jumpSets)
-                {
-                    AddJumpSet(jumpSet, currGen);
-                }
-                gens.Add(currGen);
-                jumpSets.ExceptWith(currGen);
-            }
+            List<HashSet<JumpSet>> graph = CreateGraph();
 
             int gCol = m_HeaderCols["Tree"];
             for (int row = 2; row <= m_Worksheet.Dimension.Rows; ++row)
@@ -119,9 +107,9 @@ namespace _6502Annotate
                 bool isIn = false;
                 bool isOut = false;
 
-                for (int g = gens.Count - 1; g >= 0; --g)
+                for (int g = graph.Count - 1; g >= 0; --g)
                 {
-                    var js = gens[g].FirstOrDefault(a => a.Contains(row));
+                    var js = graph[g].FirstOrDefault(a => a.Contains(row));
 
                     if (g <= 5)
                     {
@@ -212,6 +200,25 @@ namespace _6502Annotate
             }
         }
 
+        private List<HashSet<JumpSet>> CreateGraph()
+        {
+            var graph = new List<HashSet<JumpSet>>();
+            var jumpSets = FindJumpSets();
+
+            while (jumpSets.Count > 0)
+            {
+                var currLevel = new HashSet<JumpSet>();
+                foreach (var jumpSet in jumpSets)
+                {
+                    AddJumpSetToLevel(jumpSet, currLevel);
+                }
+                graph.Add(currLevel);
+                jumpSets.ExceptWith(currLevel);
+            }
+
+            return graph;
+        }
+
         private Color GraphColor(int g)
         {
             switch (g)
@@ -241,11 +248,11 @@ namespace _6502Annotate
             return Color.FromArgb(255, r, g, b);
         }
 
-        private void AddJumpSet(JumpSet js, HashSet<JumpSet> gen)
+        private void AddJumpSetToLevel(JumpSet js, HashSet<JumpSet> level)
         {
             var rejected = new HashSet<JumpSet>();
 
-            foreach (var existing in gen)
+            foreach (var existing in level)
             {
                 if (!existing.Overlaps(js))
                     continue;
@@ -260,8 +267,8 @@ namespace _6502Annotate
                 }
             }
 
-            gen.ExceptWith(rejected);
-            gen.Add(js);
+            level.ExceptWith(rejected);
+            level.Add(js);
         }
 
         private HashSet<JumpSet> FindJumpSets()
