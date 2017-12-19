@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -109,8 +110,12 @@ namespace _6502Annotate
             int gCol = m_HeaderCols["Tree"];
             for (int row = 2; row <= m_Worksheet.Dimension.Rows; ++row)
             {
-                var sb = new StringBuilder();
+                var cell = m_Worksheet.Cells[row, gCol];
+                cell.IsRichText = true;
+                cell.Value = "";
+                var rtc = cell.RichText;
 
+                Color col = Color.Black;
                 bool isIn = false;
                 bool isOut = false;
 
@@ -118,24 +123,27 @@ namespace _6502Annotate
                 {
                     var js = gens[g].FirstOrDefault(a => a.Contains(row));
 
-                    if (isOut || isIn)
+                    if (g <= 5)
                     {
-                        sb.Append('─');
-                    }
-                    else
-                    {
-                        sb.Append(' ');
+                        if (isOut || isIn)
+                        {
+                            rtc.Add("─").Color = col;
+                        }
+                        else
+                        {
+                            rtc.Add("\u00A0");
+                        }
                     }
 
                     if (js == null)
                     {
                         if (isOut || isIn)
                         {
-                            sb.Append('─');
+                            rtc.Add("─").Color = col;
                         }
                         else
                         {
-                            sb.Append(' ');
+                            rtc.Add("\u00A0");
                         }
                     }
                     else
@@ -143,24 +151,38 @@ namespace _6502Annotate
                         if (row == js.Min)
                         {
                             if (isIn || isOut)
-                                sb.Append('┬');
+                            {
+                                col = GraphColorJoin(col, GraphColor(g));
+                                rtc.Add("┬").Color = col;
+                            }
                             else
-                                sb.Append('┌');
+                            {
+                                col = GraphColor(g);
+                                rtc.Add("┌").Color = col;
+                            }
                         }
                         else if (row == js.Max)
                         {
                             if (isIn || isOut)
-                                sb.Append('┴');
+                            {
+                                col = GraphColorJoin(col, GraphColor(g));
+                                rtc.Add("┴").Color = col;
+                            }
                             else
-                                sb.Append('└');
+                            {
+                                col = GraphColor(g);
+                                rtc.Add("└").Color = col;
+                            }
                         }
                         else if (row == js.Target || js.Sources.Contains(row))
                         {
-                            sb.Append('├');
+                            col = GraphColor(g);
+                            rtc.Add("├").Color = col;
                         }
                         else
                         {
-                            sb.Append('│');
+                            var r = rtc.Add("│");
+                            r.Color = GraphColor(g);
                         }
 
                         if (row == js.Target)
@@ -177,19 +199,46 @@ namespace _6502Annotate
 
                 if (isOut)
                 {
-                    sb.Append('>');
+                    rtc.Add(">").Color = col;
                 }
                 else if (isIn)
                 {
-                    sb.Append('─');
+                    rtc.Add("─").Color = col;
                 }
                 else
                 {
-                    sb.Append(' ');
+                    rtc.Add("\u00A0");
                 }
-
-                m_Worksheet.Cells[row, gCol].Value = sb.ToString();
             }
+        }
+
+        private Color GraphColor(int g)
+        {
+            switch (g)
+            {
+                case 0:
+                    return Color.Red;
+                case 1:
+                    return Color.Blue;
+                case 2:
+                    return Color.Green;
+                case 3:
+                    return Color.Orange;
+                case 4:
+                    return Color.Magenta;
+                case 5:
+                    return Color.DarkCyan;
+                default:
+                    return Color.Gray;
+            }
+        }
+
+        private Color GraphColorJoin(Color col1, Color col2)
+        {
+            var r = (int)Math.Floor(0.5f * col1.R + 0.5f * col2.R);
+            var g = (int)Math.Floor(0.5f * col1.G + 0.5f * col2.G);
+            var b = (int)Math.Floor(0.5f * col1.B + 0.5f * col2.B);
+            return Color.FromArgb(255, r, g, b);
         }
 
         private void AddJumpSet(JumpSet js, HashSet<JumpSet> gen)
