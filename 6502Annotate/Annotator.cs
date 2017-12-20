@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using OfficeOpenXml;
 
@@ -10,6 +11,8 @@ namespace _6502Annotate
 {
     public class Annotator
     {
+        private static Regex s_IsSprite = new Regex(@"^(sprite|[░█]+(\r?\n[░█]+)*)$", RegexOptions.Multiline | RegexOptions.IgnorePatternWhitespace);
+
         private ExcelWorksheet m_Worksheet;
         private Dictionary<string, int> m_HeaderCols = new Dictionary<string, int>();
         private Dictionary<string, int> m_LabelRows = new Dictionary<string, int>();
@@ -22,10 +25,21 @@ namespace _6502Annotate
         private Annotator(ExcelWorksheet worksheet)
         {
             m_Worksheet = worksheet;
+            Console.Write("Reading xmlx... ");
             Init();
+            Console.WriteLine("done");
+            Console.Write("Decode ASM... ");
             DecodeAsms();
+            Console.WriteLine("done");
+            Console.Write("Link labels... ");
             LinkLabels();
+            Console.WriteLine("done");
+            Console.Write("Drawing sprites... ");
+            DrawSprites();
+            Console.WriteLine("done");
+            Console.Write("Drawing jump graph... ");
             DrawGraph();
+            Console.WriteLine("done");
         }
 
         private void Init()
@@ -91,6 +105,37 @@ namespace _6502Annotate
             }
         }
 
+        private void DrawSprites()
+        {
+            var asmCol = m_HeaderCols["ASM"];
+            var commentCol = m_HeaderCols["Comments"];
+
+            for (int row = m_Worksheet.Dimension.Rows; row >= 2; --row)
+            {
+                var asmCell = m_Worksheet.Cells[row, asmCol];
+                var commentCell = m_Worksheet.Cells[row, commentCol];
+
+                if (!s_IsSprite.IsMatch(commentCell.Text))
+                    continue;
+
+                // break up bytes to multiple rows:
+                var bytes = AsmUtils.GetBytes(asmCell.Text).ToList();
+                if (bytes.Count > 1)
+                {
+                    for (int i = bytes.Count - 1; i >= 1; --i)
+                    {
+                        m_Worksheet.InsertRow(row + 1, 1);
+                        var newAsmCell = m_Worksheet.Cells[row + 1, asmCol];
+                        var newCommentCell = m_Worksheet.Cells[row + 1, commentCol];
+                        newAsmCell.Value = $".byte ${bytes[i]}";
+                        newCommentCell.Value = AsmUtils.DecodeSprite(newAsmCell.Text);
+                    }
+                }
+                asmCell.Value = $".byte ${bytes[0]}";
+                commentCell.Value = AsmUtils.DecodeSprite(asmCell.Text); ;
+            }
+        }
+
         private void DrawGraph()
         {
             List<HashSet<JumpSet>> graph = CreateGraph();
@@ -138,29 +183,13 @@ namespace _6502Annotate
                     {
                         if (row == js.Min)
                         {
-                            if (isIn || isOut)
-                            {
-                                col = GraphColorJoin(col, GraphColor(g));
-                                rtc.Add("┬").Color = col;
-                            }
-                            else
-                            {
-                                col = GraphColor(g);
-                                rtc.Add("┌").Color = col;
-                            }
+                            col = GraphColor(g);
+                            rtc.Add("┌").Color = col;
                         }
                         else if (row == js.Max)
                         {
-                            if (isIn || isOut)
-                            {
-                                col = GraphColorJoin(col, GraphColor(g));
-                                rtc.Add("┴").Color = col;
-                            }
-                            else
-                            {
-                                col = GraphColor(g);
-                                rtc.Add("└").Color = col;
-                            }
+                            col = GraphColor(g);
+                            rtc.Add("└").Color = col;
                         }
                         else if (row == js.Target || js.Sources.Contains(row))
                         {
@@ -257,7 +286,7 @@ namespace _6502Annotate
                 if (!existing.Overlaps(js))
                     continue;
 
-                if (existing.IsSupersetOf(js) || js.Min < existing.Min && js.Max < existing.Max)
+                if (existing.IsSupersetOf(js) || existing.Sources.Contains(js.Target) || js.Min < existing.Min && js.Max < existing.Max)
                 {
                     rejected.Add(existing);
                 }

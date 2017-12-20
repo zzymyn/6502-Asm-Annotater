@@ -68,6 +68,8 @@ namespace _6502Annotate
             new Regex(@"^JSR (.*)$"),
         };
 
+        private static Regex s_SpriteRegex = new Regex(@"^\.byte (\$(?<num>[0-9A-F]+))(,\$(?<num>[0-9A-F]+))*$");
+
         public static string DecodeAsm(string asm)
         {
             foreach (var asmDecoder in s_AsmDecoders)
@@ -102,6 +104,32 @@ namespace _6502Annotate
                 return m.Groups[1].Value;
             }
             return null;
+        }
+
+        public static IEnumerable<string> GetBytes(string asm)
+        {
+            var m = s_SpriteRegex.Match(asm);
+            if (!m.Success)
+                return null;
+
+            var sb = new StringBuilder();
+
+            return m.Groups["num"].Captures.OfType<Capture>().Select(a => a.Value);
+        }
+
+        public static string DecodeSprite(string asm)
+        {
+            var m = s_SpriteRegex.Match(asm);
+            if (!m.Success)
+                return null;
+            var sb = new StringBuilder();
+
+            foreach (var num in m.Groups["num"].Captures.OfType<Capture>().Select(a => a.Value))
+            {
+                sb.Append(Convert.ToString(Convert.ToInt32(num, 16), 2).PadLeft(8, '0').Replace('0', '░').Replace('1', '█'));
+            }
+
+            return sb.ToString();
         }
     }
 }

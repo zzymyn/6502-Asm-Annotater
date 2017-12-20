@@ -16,7 +16,9 @@ namespace _6502Annotate
             using (var ef = new ExcelPackage(fi))
             {
                 Annotator.Annotate(ef.Workbook.Worksheets.First());
+                Console.Write("Saving... ");
                 ef.Save();
+                Console.WriteLine("done");
             }
         }
     }
